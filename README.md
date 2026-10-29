@@ -11,14 +11,19 @@ Search and download [Unsplash](https://unsplash.com) photos from the command lin
 ## Install
 
 ```bash
-# from this directory
+npm install -g @orangemust/unsplash-cli
+```
+
+Local development:
+
+```bash
 npm install
 npm run build
 npm link
-
-# or after publishing
-npm install -g @orangemust/unsplash-cli
 ```
+
+- npm: <https://www.npmjs.com/package/@orangemust/unsplash-cli>
+- GitHub: <https://github.com/mack-peng/unsplash-cli>
 
 > `unsplash-cli` on npm is an unrelated, unmaintained 2015 package. This project uses the scoped name `@orangemust/unsplash-cli`; the command is `unsplash` (alias `unsplash-cli`).
 
