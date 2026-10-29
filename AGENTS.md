@@ -16,6 +16,7 @@ unsplash download <id|url> --out <file> --json
 ## Rules
 
 - Never print, echo or log the Access Key.
+- Never pass the key as a CLI argument; use `unsplash auth set` (hidden prompt) or `pbpaste | unsplash auth set --stdin`.
 - Key lives in macOS Keychain (service `unsplash-cli`); `UNSPLASH_ACCESS_KEY` is an env override for CI only.
 - Do not create `.env` files for this project.
 - `--json` is the agent-facing output; human output is for terminals.

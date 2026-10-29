@@ -39,6 +39,8 @@ unsplash auth set
 pbpaste | unsplash auth set --stdin
 ```
 
+Do **not** run `unsplash auth set <key>` — the key would land in your shell history. The command only accepts the hidden prompt or `--stdin`.
+
 Check status without printing the key:
 
 ```bash

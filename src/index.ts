@@ -42,7 +42,8 @@ const AUTH_HELP = `Usage:
   unsplash auth clear [--json]
 
   set      Store the Access Key in macOS Keychain (prompts, input hidden).
-           Use --stdin to read from a pipe: pbpaste | unsplash auth set --stdin
+           Do not pass the key as an argument; use the prompt or --stdin:
+           pbpaste | unsplash auth set --stdin
   status   Show whether a key is configured; never prints the key.
   clear    Remove the Keychain entry.`;
 
@@ -120,16 +121,21 @@ async function runAuth(argv: string[]): Promise<void> {
   }
 
   if (sub === 'set') {
-    const { values } = parseArgs({
+    const { values, positionals } = parseArgs({
       args: argv.slice(1),
       options: {
         stdin: { type: 'boolean' },
         'skip-verify': { type: 'boolean' },
         json: { type: 'boolean' },
       },
-      allowPositionals: false,
+      allowPositionals: true,
       strict: true,
     });
+    if (positionals.length > 0) {
+      throw new Error(
+        'Do not pass the Access Key as an argument. Run `unsplash auth set` for a hidden prompt, or `pbpaste | unsplash auth set --stdin`.',
+      );
+    }
 
     const key = await readSecret('Unsplash Access Key: ', Boolean(values.stdin));
     if (!key) throw new Error('No key provided.');
