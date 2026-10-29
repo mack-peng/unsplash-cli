@@ -25,6 +25,16 @@ unsplash download <id|url> --out <file> --json
 - 401/403/429 are not retried automatically; report the error.
 - Tests: `npm test` (local mock API, no Keychain/network).
 
+## Structure
+
+- `src/cli/commands.ts` — zod command/flag schemas with descriptions
+- `src/cli/command.ts` — `declareCommand` / `parseCommand`
+- `src/cli/minimist.ts` — arg parser
+- `src/cli/output.ts` — text/JSON output
+- `src/cli/program.ts` — dispatch
+- `src/config/helpGenerator.ts` — generated help
+- `scripts/build.js` — build + `dist/help.json`
+
 ## Build
 
 ```bash

@@ -116,6 +116,18 @@ When publishing an image, keep the attribution and link. The Unsplash License al
 
 The CLI calls Unsplash's `download_location` endpoint after saving an image. If tracking fails it warns but keeps the file. API errors (401/403/429) are reported without retrying.
 
+## Architecture
+
+Follows the same CLI conventions as the other `Cli-projects`:
+
+- `src/cli/commands.ts` — zod schemas and descriptions for every command and flag
+- `src/cli/command.ts` — `declareCommand` / `parseCommand` (zod validation and error formatting)
+- `src/cli/minimist.ts` — argument parsing (`--flag`, `--no-flag`, `--key=value`, short flags)
+- `src/cli/output.ts` — `TextOutput` / `JsonOutput`
+- `src/cli/program.ts` — command dispatch
+- `src/config/helpGenerator.ts` — help generated from the zod schemas
+- `scripts/build.js` — `tsc` + `dist/help.json` generation
+
 ## Development
 
 ```bash
