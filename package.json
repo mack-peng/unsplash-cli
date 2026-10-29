@@ -1,0 +1,51 @@
+{
+  "name": "@orangemust/unsplash-cli",
+  "version": "0.1.0",
+  "description": "Search and download Unsplash photos from the command line. API key stored in macOS Keychain, never in .env.",
+  "keywords": [
+    "unsplash",
+    "photos",
+    "images",
+    "stock-photos",
+    "cli",
+    "agent",
+    "automation"
+  ],
+  "license": "MIT",
+  "author": "mack-peng",
+  "homepage": "https://github.com/mack-peng/unsplash-cli#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/mack-peng/unsplash-cli.git"
+  },
+  "bugs": {
+    "url": "https://github.com/mack-peng/unsplash-cli/issues"
+  },
+  "main": "dist/index.js",
+  "bin": {
+    "unsplash": "bin/unsplash.js",
+    "unsplash-cli": "bin/unsplash.js"
+  },
+  "files": [
+    "bin",
+    "dist",
+    "README.md",
+    "LICENSE",
+    "AGENTS.md"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "test": "tsx --test tests/*.test.ts",
+    "dev": "tsx src/index.ts",
+    "prepublishOnly": "npm run build"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.6.0"
+  }
+}
