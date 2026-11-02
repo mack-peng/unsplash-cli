@@ -52,7 +52,7 @@ const downloadCountArg = z.coerce
 const authSet = declareCommand({
   name: 'auth set',
   category: 'auth',
-  description: 'Store the Unsplash Access Key in macOS Keychain',
+  description: 'Store the Unsplash Access Key in the config file',
   options: z.object({
     stdin: z.boolean().optional().describe('read the key from stdin (for pbpaste or CI)'),
     'skip-verify': z.boolean().optional().describe('save without verifying the key against the API'),
@@ -68,7 +68,55 @@ const authStatus = declareCommand({
 const authClear = declareCommand({
   name: 'auth clear',
   category: 'auth',
-  description: 'Remove the Access Key from macOS Keychain',
+  description: 'Remove the Access Key from the config file',
+});
+
+const configKeys = z.enum(['access-key']);
+
+const configShow = declareCommand({
+  name: 'config-show',
+  category: 'config',
+  description: 'Show current configuration (Access Key masked)',
+});
+
+const configSet = declareCommand({
+  name: 'config-set',
+  category: 'config',
+  description: 'Set a configuration value',
+  args: z.object({
+    key: configKeys.describe('config key: access-key'),
+    value: z.string().describe('config value'),
+  }),
+});
+
+const configPath = declareCommand({
+  name: 'config-path',
+  category: 'config',
+  description: 'Show configuration file path',
+});
+
+const configList = declareCommand({
+  name: 'config-list',
+  category: 'config',
+  description: 'List all profiles',
+});
+
+const configUse = declareCommand({
+  name: 'config-use',
+  category: 'config',
+  description: 'Switch active profile',
+  args: z.object({
+    name: z.string().describe('profile name'),
+  }),
+});
+
+const configNew = declareCommand({
+  name: 'config-new',
+  category: 'config',
+  description: 'Create a new profile',
+  args: z.object({
+    name: z.string().describe('profile name'),
+  }),
 });
 
 const search = declareCommand({
@@ -108,6 +156,12 @@ export const commands = {
   'auth set': authSet,
   'auth status': authStatus,
   'auth clear': authClear,
+  'config-show': configShow,
+  'config-set': configSet,
+  'config-path': configPath,
+  'config-list': configList,
+  'config-use': configUse,
+  'config-new': configNew,
   search,
   download,
 };

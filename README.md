@@ -6,7 +6,7 @@ Search and download [Unsplash](https://unsplash.com) photos from the command lin
 - Download the original or a specific size
 - Writes a `<photo-id>.json` sidecar with photographer, source page and license
 - Tracks downloads as required by the Unsplash API guidelines
-- **Access Key stored in macOS Keychain** — never in `.env`, project files or shell history
+- **Access Key stored in `~/.unsplashrc`** (mode 600, profiles) — never in `.env` or project files
 
 ## Install
 
@@ -31,7 +31,9 @@ npm link
 
 Get an Access Key from <https://unsplash.com/oauth/applications> (New application → Access Key, not the Secret Key).
 
-Store it in the macOS Keychain:
+Credentials are stored in `~/.unsplashrc` (JSON, mode 600) using profiles, the same pattern as the other `Cli-projects` CLIs. Set `UNSPLASH_RC_PATH` to use a different file.
+
+Recommended — hidden prompt, key never enters shell history:
 
 ```bash
 unsplash auth set
@@ -39,25 +41,28 @@ unsplash auth set
 pbpaste | unsplash auth set --stdin
 ```
 
-Do **not** run `unsplash auth set <key>` — the key would land in your shell history. The command only accepts the hidden prompt or `--stdin`.
-
-Check status without printing the key:
+Check status or remove it:
 
 ```bash
 unsplash auth status
-# Configured: yes
-# Source: macOS Keychain (service: unsplash-cli)
-```
-
-Remove it:
-
-```bash
 unsplash auth clear
 ```
 
-The key is stored as a generic password with service `unsplash-cli` and account `default`. It is read with the macOS `security` command; the first read may show a Keychain access prompt — choose **Always Allow** if you do not want to see it again.
+Configuration commands, aligned with the other CLIs:
 
-For CI or non-macOS environments, set `UNSPLASH_ACCESS_KEY`; it takes precedence over Keychain storage.
+```bash
+unsplash config-show                    # effective config, Access Key masked
+unsplash config-set access-key <key>    # value is visible in shell history; prefer auth set
+unsplash config-path
+unsplash config-new work
+unsplash -p work auth set               # write the key to the "work" profile
+unsplash config-use work
+unsplash config-list
+```
+
+Priority: `UNSPLASH_ACCESS_KEY` > active profile `access-key`. Profile selection: `-p/--profile` > `UNSPLASH_PROFILE` > the `active` field in the config file.
+
+The macOS Keychain is no longer used. After upgrading from 0.1.2, run `unsplash auth set` once to write the key to the config file.
 
 ## Usage
 
@@ -125,6 +130,7 @@ Follows the same CLI conventions as the other `Cli-projects`:
 - `src/cli/minimist.ts` — argument parsing (`--flag`, `--no-flag`, `--key=value`, short flags)
 - `src/cli/output.ts` — `TextOutput` / `JsonOutput`
 - `src/cli/program.ts` — command dispatch
+- `src/config/config.ts` — `~/.unsplashrc` profiles and credential resolution
 - `src/config/helpGenerator.ts` — help generated from the zod schemas
 - `scripts/build.js` — `tsc` + `dist/help.json` generation
 
@@ -138,7 +144,7 @@ npm run build
 node bin/unsplash.js --help
 ```
 
-Tests use a local mock API (`UNSPLASH_API_BASE`) and never touch the real Keychain or network.
+Tests use a local mock API (`UNSPLASH_API_BASE`) and never touch the real config file or network.
 
 ## License
 
