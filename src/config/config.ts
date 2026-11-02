@@ -29,14 +29,37 @@ export interface CredentialStatus {
   permissions: string | null;
 }
 
+const RESERVED_PROFILE_NAMES = new Set(['__proto__', 'constructor', 'prototype']);
+const PROFILE_NAME_PATTERN = /^[A-Za-z0-9._-]+$/;
+
 export function rcFilePath(): string {
   return process.env.UNSPLASH_RC_PATH || path.join(os.homedir(), '.unsplashrc');
 }
 
+export function isValidProfileName(name: string): boolean {
+  return PROFILE_NAME_PATTERN.test(name) && !RESERVED_PROFILE_NAMES.has(name);
+}
+
+function assertValidProfileName(name: string): void {
+  if (!isValidProfileName(name)) {
+    throw new Error(
+      `Invalid profile name '${name}'. Use letters, numbers, dots, underscores or hyphens.`,
+    );
+  }
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
 let cachedRc: { path: string; rc: RcFile; mtime: number } | null = null;
 
+function emptyProfiles(): Record<string, ProfileConfig> {
+  return Object.create(null) as Record<string, ProfileConfig>;
+}
+
 function emptyRc(): RcFile {
-  return { active: 'default', profiles: {} };
+  return { active: 'default', profiles: emptyProfiles() };
 }
 
 function normalizeProfile(value: unknown): ProfileConfig {
@@ -44,37 +67,60 @@ function normalizeProfile(value: unknown): ProfileConfig {
   return { 'access-key': typeof raw['access-key'] === 'string' ? raw['access-key'] : '' };
 }
 
-function normalizeRc(value: unknown): RcFile {
-  if (!value || typeof value !== 'object') return emptyRc();
+function normalizeRc(value: unknown, target: string): RcFile {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw new Error(`Invalid config in ${target}: expected a JSON object.`);
+  }
   const raw = value as { active?: unknown; profiles?: unknown };
-  const profiles: Record<string, ProfileConfig> = {};
-  if (raw.profiles && typeof raw.profiles === 'object') {
+  const profiles = emptyProfiles();
+  if (raw.profiles !== undefined) {
+    if (!raw.profiles || typeof raw.profiles !== 'object' || Array.isArray(raw.profiles)) {
+      throw new Error(`Invalid config in ${target}: "profiles" must be an object.`);
+    }
     for (const [name, profile] of Object.entries(raw.profiles as Record<string, unknown>)) {
+      if (!isValidProfileName(name)) continue;
       profiles[name] = normalizeProfile(profile);
     }
   }
   const active = typeof raw.active === 'string' && raw.active ? raw.active : 'default';
+  if (!isValidProfileName(active)) {
+    throw new Error(`Invalid config in ${target}: "active" is not a valid profile name.`);
+  }
   return { active, profiles };
 }
 
 function readRcFile(): RcFile {
+  const target = rcFilePath();
+  let stat: fs.Stats;
   try {
-    const target = rcFilePath();
-    const stat = fs.statSync(target);
-    if (cachedRc && cachedRc.path === target && cachedRc.mtime === stat.mtimeMs) return cachedRc.rc;
-    if (process.platform !== 'win32' && (stat.mode & 0o077) !== 0) {
-      try {
-        fs.chmodSync(target, 0o600);
-      } catch {
-        // keep reading even if permissions cannot be tightened
-      }
-    }
-    const rc = normalizeRc(JSON.parse(fs.readFileSync(target, 'utf-8')));
-    cachedRc = { path: target, rc, mtime: stat.mtimeMs };
-    return rc;
-  } catch {
-    return emptyRc();
+    stat = fs.statSync(target);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return emptyRc();
+    throw new Error(`Cannot read ${target}: ${errorMessage(error)}`);
   }
+  if (cachedRc && cachedRc.path === target && cachedRc.mtime === stat.mtimeMs) return cachedRc.rc;
+  if (process.platform !== 'win32' && (stat.mode & 0o077) !== 0) {
+    try {
+      fs.chmodSync(target, 0o600);
+    } catch {
+      // keep reading even if permissions cannot be tightened
+    }
+  }
+  let content: string;
+  try {
+    content = fs.readFileSync(target, 'utf-8');
+  } catch (error) {
+    throw new Error(`Cannot read ${target}: ${errorMessage(error)}`);
+  }
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(content);
+  } catch {
+    throw new Error(`Invalid JSON in ${target}. Fix the file or move it aside before retrying.`);
+  }
+  const rc = normalizeRc(parsed, target);
+  cachedRc = { path: target, rc, mtime: stat.mtimeMs };
+  return rc;
 }
 
 function writeRcFile(rc: RcFile): void {
@@ -108,6 +154,7 @@ export function maskKey(value?: string): string {
 }
 
 export function filePermissions(): string | null {
+  if (process.platform === 'win32') return null;
   try {
     return (fs.statSync(rcFilePath()).mode & 0o777).toString(8).padStart(3, '0');
   } catch {
@@ -115,16 +162,34 @@ export function filePermissions(): string | null {
   }
 }
 
-function resolveProfileName(args: MinimistArgs): string {
+export function explicitProfileName(args: MinimistArgs): string | undefined {
   const fromArgs =
-    typeof args.p === 'string'
-      ? args.p
-      : typeof args.profile === 'string'
-        ? args.profile
+    typeof args.profile === 'string'
+      ? args.profile
+      : typeof args.p === 'string'
+        ? args.p
         : undefined;
-  if (fromArgs) return fromArgs;
-  if (process.env.UNSPLASH_PROFILE) return process.env.UNSPLASH_PROFILE;
-  return readRcFile().active;
+  if (fromArgs) {
+    assertValidProfileName(fromArgs);
+    return fromArgs;
+  }
+  if (process.env.UNSPLASH_PROFILE) {
+    assertValidProfileName(process.env.UNSPLASH_PROFILE);
+    return process.env.UNSPLASH_PROFILE;
+  }
+  return undefined;
+}
+
+export function resolveProfileName(args: MinimistArgs): string {
+  const explicit = explicitProfileName(args);
+  if (explicit) return explicit;
+  const active = readRcFile().active;
+  assertValidProfileName(active);
+  return active;
+}
+
+export function profileExists(name: string): boolean {
+  return Boolean(readRcFile().profiles[name]);
 }
 
 function resolveProfile(args: MinimistArgs): { name: string; profile: ProfileConfig } {
@@ -140,7 +205,7 @@ export function loadConfig(args: MinimistArgs): Config {
   const accessKey = envKey() || profile['access-key'];
   if (!accessKey) {
     throw new Error(
-      'Unsplash Access Key is not configured. Set UNSPLASH_ACCESS_KEY, or run: unsplash config-set access-key <key> (or unsplash auth set).',
+      'Unsplash Access Key is not configured. Set UNSPLASH_ACCESS_KEY, or run: unsplash config-set access-key (or unsplash auth set).',
     );
   }
   return {
@@ -175,6 +240,7 @@ export function writeRcConfig(
 ): Record<string, string> {
   const rc = readRcFile();
   const name = profileName || rc.active;
+  assertValidProfileName(name);
   if (!rc.profiles[name]) rc.profiles[name] = { 'access-key': '' };
   rc.profiles[name][key] = value;
   writeRcFile(rc);
@@ -186,6 +252,7 @@ export function getRcConfig(): RcFile {
 }
 
 export function setActiveProfile(name: string): void {
+  assertValidProfileName(name);
   const rc = readRcFile();
   if (!rc.profiles[name]) throw new Error(`Profile '${name}' not found`);
   rc.active = name;
@@ -193,6 +260,7 @@ export function setActiveProfile(name: string): void {
 }
 
 export function createProfile(name: string): void {
+  assertValidProfileName(name);
   const rc = readRcFile();
   if (rc.profiles[name]) throw new Error(`Profile '${name}' already exists`);
   rc.profiles[name] = { 'access-key': '' };
@@ -202,6 +270,7 @@ export function createProfile(name: string): void {
 export function clearAccessKey(profileName?: string): { profile: string; cleared: boolean } {
   const rc = readRcFile();
   const name = profileName || rc.active;
+  assertValidProfileName(name);
   const profile = rc.profiles[name];
   if (!profile || !profile['access-key']) return { profile: name, cleared: false };
   profile['access-key'] = '';

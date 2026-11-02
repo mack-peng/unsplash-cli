@@ -96,7 +96,7 @@ export function generateHelp(): string {
   lines.push('');
   lines.push('Security:');
   lines.push('  The Access Key is stored in ~/.unsplashrc (mode 600) or UNSPLASH_ACCESS_KEY.');
-  lines.push('  Prefer `unsplash auth set` or --stdin; config-set may expose the key in shell history.');
+  lines.push('  Prefer `unsplash auth set` or `unsplash config-set access-key` (hidden prompt); use --stdin in scripts.');
 
   return lines.join('\n');
 }

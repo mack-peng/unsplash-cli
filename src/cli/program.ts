@@ -7,10 +7,13 @@ import {
   createProfile,
   credentialStatus,
   envKey,
+  explicitProfileName,
   getRcConfig,
   loadConfig,
   maskKey,
+  profileExists,
   rcFilePath,
+  resolveProfileName,
   setActiveProfile,
   writeRcConfig,
 } from '../config/config';
@@ -47,11 +50,14 @@ export async function program(): Promise<void> {
     boolean: [...help.booleanOptions, 'help', 'h', 'version', 'v', 'json'],
     string: ['_'],
   });
-  if (rawArgs.p && !rawArgs.profile) {
+  const output: Output = rawArgs.json ? new JsonOutput() : new TextOutput();
+  if (rawArgs.p) {
+    if (rawArgs.profile && rawArgs.profile !== rawArgs.p) {
+      output.error('Use either -p or --profile, not both.');
+    }
     rawArgs.profile = rawArgs.p;
     delete rawArgs.p;
   }
-  const output: Output = rawArgs.json ? new JsonOutput() : new TextOutput();
   const commandName = normalizeCommand(rawArgs);
   const cmdEntry = commandName ? help.commands[commandName] : undefined;
   const command = commandName ? commands[commandName as keyof typeof commands] : undefined;
@@ -95,7 +101,7 @@ export async function program(): Promise<void> {
         runConfigShow(rawArgs, output);
         return;
       case 'config-set':
-        runConfigSet(parsed, rawArgs, output);
+        await runConfigSet(parsed, rawArgs, output);
         return;
       case 'config-path':
         runConfigPath(output);
@@ -123,11 +129,20 @@ export async function program(): Promise<void> {
   }
 }
 
+function resolveWriteProfile(args: MinimistArgs): string {
+  const explicit = explicitProfileName(args);
+  if (explicit && !profileExists(explicit)) {
+    throw new Error(`Profile '${explicit}' not found. Run: unsplash config-new ${explicit}`);
+  }
+  return resolveProfileName(args);
+}
+
 async function runAuthSet(
   parsed: Record<string, any>,
   args: MinimistArgs,
   output: Output,
 ): Promise<void> {
+  const profile = resolveWriteProfile(args);
   const key = await readSecret('Unsplash Access Key: ', Boolean(parsed.stdin));
   if (!key) throw new Error('No key provided.');
 
@@ -144,7 +159,6 @@ async function runAuthSet(
     }
   }
 
-  const profile = typeof args.profile === 'string' ? args.profile : undefined;
   const result = writeRcConfig('access-key', key, profile);
   if (output.json) {
     console.log(
@@ -156,8 +170,9 @@ async function runAuthSet(
       }),
     );
   } else {
+    const protection = process.platform === 'win32' ? 'Windows user-profile ACLs' : 'mode 600';
     console.log(
-      `Saved Unsplash Access Key to ${rcFilePath()} (profile: ${result.profile}, mode 600).`,
+      `Saved Unsplash Access Key to ${rcFilePath()} (profile: ${result.profile}, ${protection}).`,
     );
   }
 }
@@ -183,8 +198,7 @@ function runAuthStatus(args: MinimistArgs, output: Output): void {
 }
 
 function runAuthClear(args: MinimistArgs, output: Output): void {
-  const profile = typeof args.profile === 'string' ? args.profile : undefined;
-  const result = clearAccessKey(profile);
+  const result = clearAccessKey(resolveWriteProfile(args));
   if (output.json) {
     console.log(
       output.format({
@@ -220,13 +234,16 @@ function runConfigShow(args: MinimistArgs, output: Output): void {
   console.log(`Environment: ${status.env ? 'set' : 'not set'}`);
 }
 
-function runConfigSet(parsed: Record<string, any>, args: MinimistArgs, output: Output): void {
-  const profile = typeof args.profile === 'string' ? args.profile : undefined;
-  const result = writeRcConfig(
-    parsed.key as 'access-key',
-    parsed.value as string,
-    profile,
-  );
+async function runConfigSet(
+  parsed: Record<string, any>,
+  args: MinimistArgs,
+  output: Output,
+): Promise<void> {
+  const value =
+    (parsed.value as string | undefined) ??
+    (await readSecret('Unsplash Access Key: ', Boolean(parsed.stdin)));
+  if (!value) throw new Error('No value provided.');
+  const result = writeRcConfig(parsed.key as 'access-key', value, resolveWriteProfile(args));
   if (output.json) {
     console.log(output.format({ ...result, path: rcFilePath() }));
   } else {

@@ -31,7 +31,7 @@ npm link
 
 Get an Access Key from <https://unsplash.com/oauth/applications> (New application → Access Key, not the Secret Key).
 
-Credentials are stored in `~/.unsplashrc` (JSON, mode 600) using profiles, the same pattern as the other `Cli-projects` CLIs. Set `UNSPLASH_RC_PATH` to use a different file.
+Credentials are stored in `~/.unsplashrc` (JSON, mode 600 on POSIX; Windows uses user-profile ACLs) using profiles, the same pattern as the other `Cli-projects` CLIs. Set `UNSPLASH_RC_PATH` to use a different file. A corrupt or unreadable file is reported instead of being silently overwritten.
 
 Recommended — hidden prompt, key never enters shell history:
 
@@ -52,7 +52,8 @@ Configuration commands, aligned with the other CLIs:
 
 ```bash
 unsplash config-show                    # effective config, Access Key masked
-unsplash config-set access-key <key>    # value is visible in shell history; prefer auth set
+unsplash config-set access-key          # hidden prompt; no key in shell history
+pbpaste | unsplash config-set access-key --stdin
 unsplash config-path
 unsplash config-new work
 unsplash -p work auth set               # write the key to the "work" profile
@@ -61,6 +62,8 @@ unsplash config-list
 ```
 
 Priority: `UNSPLASH_ACCESS_KEY` > active profile `access-key`. Profile selection: `-p/--profile` > `UNSPLASH_PROFILE` > the `active` field in the config file.
+
+`auth status --json` returns `configured`, `source` (`env` / `config`), `env`, `profile`, `access-key` (masked), `config_path` and `permissions`. The `keychain` field and `source: "keychain"` were removed in 0.2.0.
 
 The macOS Keychain is no longer used. After upgrading from 0.1.2, run `unsplash auth set` once to write the key to the config file.
 
