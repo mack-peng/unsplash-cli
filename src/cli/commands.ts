@@ -85,10 +85,9 @@ const configSet = declareCommand({
   description: 'Set a configuration value',
   args: z.object({
     key: configKeys.describe('config key: access-key'),
-    value: z.string().optional().describe('config value (omit to enter the Access Key with a hidden prompt)'),
   }),
   options: z.object({
-    stdin: z.boolean().optional().describe('read the Access Key from stdin (when value is omitted)'),
+    stdin: z.boolean().optional().describe('read the Access Key from stdin'),
   }),
 });
 

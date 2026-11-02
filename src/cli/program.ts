@@ -240,10 +240,8 @@ async function runConfigSet(
   output: Output,
 ): Promise<void> {
   const profile = resolveWriteProfile(args);
-  const value =
-    (parsed.value as string | undefined) ??
-    (await readSecret('Unsplash Access Key: ', Boolean(parsed.stdin)));
-  if (!value) throw new Error('No value provided.');
+  const value = await readSecret('Unsplash Access Key: ', Boolean(parsed.stdin));
+  if (!value) throw new Error('No key provided.');
   const result = writeRcConfig(parsed.key as 'access-key', value, profile);
   if (output.json) {
     console.log(output.format({ ...result, path: rcFilePath() }));
