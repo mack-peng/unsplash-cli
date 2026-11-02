@@ -239,11 +239,12 @@ async function runConfigSet(
   args: MinimistArgs,
   output: Output,
 ): Promise<void> {
+  const profile = resolveWriteProfile(args);
   const value =
     (parsed.value as string | undefined) ??
     (await readSecret('Unsplash Access Key: ', Boolean(parsed.stdin)));
   if (!value) throw new Error('No value provided.');
-  const result = writeRcConfig(parsed.key as 'access-key', value, resolveWriteProfile(args));
+  const result = writeRcConfig(parsed.key as 'access-key', value, profile);
   if (output.json) {
     console.log(output.format({ ...result, path: rcFilePath() }));
   } else {
