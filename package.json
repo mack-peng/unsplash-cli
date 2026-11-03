@@ -1,6 +1,6 @@
 {
   "name": "@orangemust/unsplash-cli",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Search and download Unsplash photos from the command line. API key stored in a mode-600 config file, never in .env.",
   "keywords": [
     "unsplash",
