@@ -16,3 +16,6 @@ coverage/
 .DS_Store
 *.tgz
 *.log
+
+# Local code index
+.codegraph/

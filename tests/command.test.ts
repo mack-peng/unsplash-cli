@@ -75,3 +75,18 @@ test('auth status takes no positional arguments', () => {
     /too many arguments/,
   );
 });
+
+test('config-set rejects a positional key without echoing it', () => {
+  assert.throws(
+    () =>
+      parseCommand(commands['config-set'] as any, {
+        _: ['config-set', 'access-key', 'SHOULD_NOT_ECHO'],
+      }),
+    (error: unknown) => {
+      assert.ok(error instanceof Error);
+      assert.match(error.message, /too many arguments/);
+      assert.doesNotMatch(error.message, /SHOULD_NOT_ECHO/);
+      return true;
+    },
+  );
+});

@@ -1,7 +1,7 @@
 {
   "name": "@orangemust/unsplash-cli",
-  "version": "0.1.2",
-  "description": "Search and download Unsplash photos from the command line. API key stored in macOS Keychain, never in .env.",
+  "version": "0.2.0",
+  "description": "Search and download Unsplash photos from the command line. API key stored in a mode-600 config file, never in .env.",
   "keywords": [
     "unsplash",
     "photos",

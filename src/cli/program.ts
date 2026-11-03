@@ -1,14 +1,22 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { ApiError, RateLimit, UnsplashApi } from '../api';
+import { readSecret } from '../auth';
 import {
-  deleteKeychainKey,
+  clearAccessKey,
+  createProfile,
+  credentialStatus,
   envKey,
-  keychainStatus,
-  readSecret,
-  resolveKey,
-  writeKeychainKey,
-} from '../auth';
+  explicitProfileName,
+  getRcConfig,
+  loadConfig,
+  maskKey,
+  profileExists,
+  rcFilePath,
+  resolveProfileName,
+  setActiveProfile,
+  writeRcConfig,
+} from '../config/config';
 import {
   CompactPhoto,
   DownloadRecord,
@@ -24,7 +32,7 @@ import type { MinimistArgs } from './minimist';
 import { JsonOutput, TextOutput } from './output';
 import type { Output } from './output';
 
-const globalOptions = ['json', 'help', 'h', 'version', 'v'];
+const globalOptions = ['json', 'help', 'h', 'version', 'v', 'p', 'profile'];
 
 interface SearchResultView {
   query: string;
@@ -43,6 +51,13 @@ export async function program(): Promise<void> {
     string: ['_'],
   });
   const output: Output = rawArgs.json ? new JsonOutput() : new TextOutput();
+  if (rawArgs.p) {
+    if (rawArgs.profile && rawArgs.profile !== rawArgs.p) {
+      output.error('Use either -p or --profile, not both.');
+    }
+    rawArgs.profile = rawArgs.p;
+    delete rawArgs.p;
+  }
   const commandName = normalizeCommand(rawArgs);
   const cmdEntry = commandName ? help.commands[commandName] : undefined;
   const command = commandName ? commands[commandName as keyof typeof commands] : undefined;
@@ -74,19 +89,37 @@ export async function program(): Promise<void> {
 
     switch (commandName) {
       case 'auth set':
-        await runAuthSet(parsed, output);
+        await runAuthSet(parsed, rawArgs, output);
         return;
       case 'auth status':
-        runAuthStatus(output);
+        runAuthStatus(rawArgs, output);
         return;
       case 'auth clear':
-        runAuthClear(output);
+        runAuthClear(rawArgs, output);
+        return;
+      case 'config-show':
+        runConfigShow(rawArgs, output);
+        return;
+      case 'config-set':
+        await runConfigSet(parsed, rawArgs, output);
+        return;
+      case 'config-path':
+        runConfigPath(output);
+        return;
+      case 'config-list':
+        runConfigList(output);
+        return;
+      case 'config-use':
+        runConfigUse(parsed, output);
+        return;
+      case 'config-new':
+        runConfigNew(parsed, output);
         return;
       case 'search':
-        await runSearch(parsed, output);
+        await runSearch(parsed, rawArgs, output);
         return;
       case 'download':
-        await runDownload(parsed, output);
+        await runDownload(parsed, rawArgs, output);
         return;
       default:
         output.error(`Unknown command: ${commandName}`);
@@ -96,7 +129,20 @@ export async function program(): Promise<void> {
   }
 }
 
-async function runAuthSet(parsed: Record<string, any>, output: Output): Promise<void> {
+function resolveWriteProfile(args: MinimistArgs): string {
+  const explicit = explicitProfileName(args);
+  if (explicit && !profileExists(explicit)) {
+    throw new Error(`Profile '${explicit}' not found. Run: unsplash config-new ${explicit}`);
+  }
+  return resolveProfileName(args);
+}
+
+async function runAuthSet(
+  parsed: Record<string, any>,
+  args: MinimistArgs,
+  output: Output,
+): Promise<void> {
+  const profile = resolveWriteProfile(args);
   const key = await readSecret('Unsplash Access Key: ', Boolean(parsed.stdin));
   if (!key) throw new Error('No key provided.');
 
@@ -113,43 +159,59 @@ async function runAuthSet(parsed: Record<string, any>, output: Output): Promise<
     }
   }
 
-  writeKeychainKey(key);
+  const result = writeRcConfig('access-key', key, profile);
   if (output.json) {
-    console.log(output.format({ configured: true, source: 'keychain' }));
+    console.log(
+      output.format({
+        configured: true,
+        source: 'config',
+        profile: result.profile,
+        path: rcFilePath(),
+      }),
+    );
   } else {
-    console.log('Saved Unsplash Access Key to macOS Keychain (service: unsplash-cli).');
+    const protection = process.platform === 'win32' ? 'Windows user-profile ACLs' : 'mode 600';
+    console.log(
+      `Saved Unsplash Access Key to ${rcFilePath()} (profile: ${result.profile}, ${protection}).`,
+    );
   }
 }
 
-function runAuthStatus(output: Output): void {
-  const env = Boolean(envKey());
-  const keychain = keychainStatus();
-  const source = env ? 'env' : keychain === 'configured' ? 'keychain' : null;
-  const configured = source !== null;
-  const status = { configured, source, env, keychain };
-
+function runAuthStatus(args: MinimistArgs, output: Output): void {
+  const status = credentialStatus(args);
   if (output.json) {
     console.log(output.format(status));
     return;
   }
-  console.log(`Configured: ${configured ? 'yes' : 'no'}`);
-  if (configured) {
+  console.log(`Configured: ${status.configured ? 'yes' : 'no'}`);
+  if (status.configured) {
     console.log(
-      `Source: ${source === 'env' ? 'UNSPLASH_ACCESS_KEY environment variable' : 'macOS Keychain (service: unsplash-cli)'}`,
+      `Source: ${status.source === 'env' ? 'UNSPLASH_ACCESS_KEY environment variable' : `config file (profile: ${status.profile})`}`,
     );
   }
-  console.log(`Keychain: ${keychain}`);
-  console.log(`Environment: ${env ? 'set' : 'not set'}`);
-  if (!configured) console.log('\nRun: unsplash auth set');
+  console.log(`Profile: ${status.profile}`);
+  console.log(
+    `Config: ${status.config_path}${status.permissions ? ` (mode ${status.permissions})` : ''}`,
+  );
+  console.log(`Environment: ${status.env ? 'set' : 'not set'}`);
+  if (!status.configured) console.log('\nRun: unsplash auth set');
 }
 
-function runAuthClear(output: Output): void {
-  const removed = deleteKeychainKey();
+function runAuthClear(args: MinimistArgs, output: Output): void {
+  const result = clearAccessKey(resolveWriteProfile(args));
   if (output.json) {
-    console.log(output.format({ cleared: removed }));
+    console.log(
+      output.format({
+        cleared: result.cleared,
+        profile: result.profile,
+        path: rcFilePath(),
+      }),
+    );
   } else {
     console.log(
-      removed ? 'Removed Unsplash Access Key from macOS Keychain.' : 'No Keychain entry found.',
+      result.cleared
+        ? `Removed Unsplash Access Key from ${rcFilePath()} (profile: ${result.profile}).`
+        : `No Access Key found in profile '${result.profile}'.`,
     );
   }
   if (envKey()) {
@@ -157,7 +219,85 @@ function runAuthClear(output: Output): void {
   }
 }
 
-async function runSearch(parsed: Record<string, any>, output: Output): Promise<void> {
+function runConfigShow(args: MinimistArgs, output: Output): void {
+  const status = credentialStatus(args);
+  if (output.json) {
+    console.log(output.format(status));
+    return;
+  }
+  console.log(`Profile: ${status.profile}`);
+  console.log(`Access Key: ${status['access-key']}`);
+  console.log(`Source: ${status.source ?? '(not configured)'}`);
+  console.log(
+    `Config: ${status.config_path}${status.permissions ? ` (mode ${status.permissions})` : ''}`,
+  );
+  console.log(`Environment: ${status.env ? 'set' : 'not set'}`);
+}
+
+async function runConfigSet(
+  parsed: Record<string, any>,
+  args: MinimistArgs,
+  output: Output,
+): Promise<void> {
+  const profile = resolveWriteProfile(args);
+  const value = await readSecret('Unsplash Access Key: ', Boolean(parsed.stdin));
+  if (!value) throw new Error('No key provided.');
+  const result = writeRcConfig(parsed.key as 'access-key', value, profile);
+  if (output.json) {
+    console.log(output.format({ ...result, path: rcFilePath() }));
+  } else {
+    console.log(
+      `Set ${parsed.key}=${result[parsed.key]} for profile '${result.profile}' in ${rcFilePath()}.`,
+    );
+  }
+}
+
+function runConfigPath(output: Output): void {
+  if (output.json) {
+    console.log(output.format({ path: rcFilePath() }));
+  } else {
+    console.log(rcFilePath());
+  }
+}
+
+function runConfigList(output: Output): void {
+  const rc = getRcConfig();
+  const profiles = Object.entries(rc.profiles).map(([name, profile]) => ({
+    name,
+    active: name === rc.active,
+    'access-key': maskKey(profile['access-key']),
+  }));
+  if (output.json) {
+    console.log(output.format({ active: rc.active, profiles }));
+    return;
+  }
+  console.log(`Active: ${rc.active}`);
+  console.log(output.format(profiles));
+}
+
+function runConfigUse(parsed: Record<string, any>, output: Output): void {
+  setActiveProfile(parsed.name);
+  if (output.json) {
+    console.log(output.format({ active: parsed.name }));
+  } else {
+    console.log(`Active profile: ${parsed.name}`);
+  }
+}
+
+function runConfigNew(parsed: Record<string, any>, output: Output): void {
+  createProfile(parsed.name);
+  if (output.json) {
+    console.log(output.format({ created: parsed.name }));
+  } else {
+    console.log(`Created profile: ${parsed.name}`);
+  }
+}
+
+async function runSearch(
+  parsed: Record<string, any>,
+  args: MinimistArgs,
+  output: Output,
+): Promise<void> {
   const query = parsed.query as string;
   const perPage = parsed['per-page'] as number;
   const page = parsed.page as number;
@@ -166,8 +306,8 @@ async function runSearch(parsed: Record<string, any>, output: Output): Promise<v
   const outDir = parsed['out-dir'] as string | undefined;
   if (downloadCount > 0 && !outDir) throw new Error('--out-dir is required with --download.');
 
-  const { key } = resolveKey();
-  const api = new UnsplashApi(key);
+  const config = loadConfig(args);
+  const api = new UnsplashApi(config['access-key']);
   const data = await api.search(query, {
     perPage,
     page,
@@ -212,13 +352,17 @@ async function runSearch(parsed: Record<string, any>, output: Output): Promise<v
   printSearch(view);
 }
 
-async function runDownload(parsed: Record<string, any>, output: Output): Promise<void> {
+async function runDownload(
+  parsed: Record<string, any>,
+  args: MinimistArgs,
+  output: Output,
+): Promise<void> {
   const out = parsed.out as string | undefined;
   const outDir = parsed['out-dir'] as string | undefined;
   if (!out && !outDir) throw new Error('download requires --out or --out-dir.');
 
-  const { key } = resolveKey();
-  const api = new UnsplashApi(key);
+  const config = loadConfig(args);
+  const api = new UnsplashApi(config['access-key']);
   const record = await downloadPhoto(api, parsed.ref as string, {
     out,
     outDir,

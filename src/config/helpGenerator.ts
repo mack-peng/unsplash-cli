@@ -54,6 +54,7 @@ function generateCommandHelp(command: AnyCommandSchema): string {
   lines.push('');
   lines.push('Global options:');
   lines.push(formatWithGap('  --json', 'output as JSON'));
+  lines.push(formatWithGap('  -p, --profile', 'use a named config profile'));
   lines.push(formatWithGap('  --help, -h', 'print help'));
   lines.push(formatWithGap('  --version, -v', 'print version'));
 
@@ -63,6 +64,7 @@ function generateCommandHelp(command: AnyCommandSchema): string {
 const categories: { name: Category; title: string }[] = [
   { name: 'auth', title: 'Authentication' },
   { name: 'photos', title: 'Photos' },
+  { name: 'config', title: 'Configuration' },
 ];
 
 export function generateHelp(): string {
@@ -87,13 +89,14 @@ export function generateHelp(): string {
 
   lines.push('\nGlobal options:');
   lines.push(formatWithGap('  --json', 'output as JSON'));
+  lines.push(formatWithGap('  -p, --profile', 'use a named config profile'));
   lines.push(formatWithGap('  --help, -h', 'print help'));
   lines.push(formatWithGap('  --version, -v', 'print version'));
 
   lines.push('');
   lines.push('Security:');
-  lines.push('  The Access Key is stored in macOS Keychain (service "unsplash-cli").');
-  lines.push('  Never pass it as an argument; use `unsplash auth set` or --stdin.');
+  lines.push('  The Access Key is stored in ~/.unsplashrc (mode 600) or UNSPLASH_ACCESS_KEY.');
+  lines.push('  Prefer `unsplash auth set` or `unsplash config-set access-key` (hidden prompt); use --stdin in scripts.');
 
   return lines.join('\n');
 }

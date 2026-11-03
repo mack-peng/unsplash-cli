@@ -1,6 +1,6 @@
 import * as z from 'zod';
 
-export type Category = 'auth' | 'photos';
+export type Category = 'auth' | 'photos' | 'config';
 
 export interface HelpEntry {
   help: string;
